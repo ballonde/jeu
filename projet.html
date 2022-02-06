@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" /><title>Mon 1er jeu Phaser</title>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.51.0/dist/phaser.js">
+    </script>
+
+    <style type="text/css"> body 
+    
+        { margin: 0; 
+        }
+        
+    
+    </style>
+<script async src='/cdn-cgi/bm/cv/669835187/api.js'></script></head>
+<body>
+    <script type="text/javascript">
+
+        var config = {
+            type: Phaser.AUTO,
+            width: 1280, height: 720,
+            physics: {
+            default: 'arcade',
+            arcade: {
+            gravity: { y: 1500},
+            debug: false
+            }},
+            input : {gamepad:true},
+            scene: {preload: preload, create: create, update: update }
+            };
+
+        new Phaser.Game(config);
+
+        function preload(){
+
+        //chargement des images
+        this.load.image("tiles", "assets/sprite_sidescroller.png");
+        this.load.tilemapTiledJSON("map", "assets/map.json");  
+        this.load.image('filet', 'assets/Filet.png');
+        this.load.image('station', 'assets/station_de_modification.png');
+        this.load.image('porte', 'assets/porte.png');
+        this.load.image('capteur', 'assets/capteur.png');
+        this.load.image('menu', 'assets/menuDemarrage.png');
+
+        //chargement des spritesheets
+        this.load.spritesheet('perso','assets/spritesheetRequin.png',
+            { frameWidth: 128, frameHeight: 64 });
+        this.load.spritesheet('tortue_mine','assets/spritesheeTortueMine.png',
+            { frameWidth: 64, frameHeight: 32 });
+        this.load.spritesheet('sous-marin','assets/spritesheetSous-Marin.png',
+            { frameWidth: 128, frameHeight: 96 });
+        this.load.spritesheet('BarreVie','assets/spritesheetBarreVie.png',
+            { frameWidth: 64, frameHeight: 32 });
+        this.load.spritesheet('BarreEndu','assets/spritesheetBarre_endu.png',
+            { frameWidth: 48, frameHeight: 16 });
+        this.load.spritesheet('exploTortue','assets/explosionTortue.png',
+            { frameWidth: 64, frameHeight: 64});
+        this.load.spritesheet('symbPro','assets/symboleProfondeur.png',
+            { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('symbInvi','assets/symboleInvi.png',
+            { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('symbStat','assets/symboleStatAugmente.png',
+            { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('vieArmor','assets/barreVieArmure.png',
+            { frameWidth: 64, frameHeight: 32 });
+        this.load.image('background', 'assets/arrierePlan.png');
+        }
+
+        //déclaration des variables
+        var paddle;
+        var padConnected;
+
+        var player;
+        var cursors;
+        var symbole;
+        var avertissement;
+        var actInvi;
+        var vieArmure;
+        var filet;
+        var back;
+        var tortues;
+        var sousMarins;
+        var powerUp;
+        var droite=false;
+        var gauche=false;
+        var up=false;
+        var down=false;
+        var space=false;
+        var gameOver=false;
+        var profondeur=false;
+        var invincible=false;
+        var invisibilite=false;
+        var renforceStat=false;
+        var armor=false;
+        var jaugeBoost=600;
+        var vieJoueur=6;
+        var directionSousMarin=0;
+        var directionSousMarin2=0;
+        var directionSousMarin3=0;
+        var directionSousMarin4=0;
+        var compteur=90;
+        var compteurProfondeur=90;
+        var reducCoupEndu=0;
+        var compteurArmor=0;
+        var nbArmure=0;
+    
+
+        function create (){
+            //création des touches
+            cursors = this.input.keyboard.createCursorKeys();
+            this.keys = this.input.keyboard.addKeys({
+                a:  Phaser.Input.Keyboard.KeyCodes.A,
+            });
+            
+
+            //importer image de fond
+            menuDebut = this.add.image(640,360, 'menu').setDepth(1).setScrollFactor(0);
+            const carteDuNiveau = this.add.tilemap("map");
+
+            // importer TileSet 
+            const tileset = carteDuNiveau.addTilesetImage(
+                "sprite_sidescroller_map",
+                "tiles"
+                    ); 
+                    
+
+            back = this.physics.add.staticGroup();
+            back.create(4000, 1100, 'background');
+
+            //créer image de porte et de capteur
+            portes = this.physics.add.staticGroup();
+            portes.create(7950, 1200, 'porte').setScale(2);
+            portes.create(7900, 1200, 'porte').setScale(2);
+
+            capteur = this.physics.add.staticGroup();
+            capteur.create(7800, 1550, 'capteur').setScale(2);
+            capteur.create(7700, 1550, 'capteur').setScale(2);
+
+            const plateformes = carteDuNiveau.createStaticLayer(
+            "zero",
+            tileset
+            );
+            const nouv = carteDuNiveau.createStaticLayer(
+            "test",
+            tileset
+            );
+                  
+            //création du joueur
+            player = this.physics.add.sprite(300,1380, 'perso')
+            player.setCollideWorldBounds(true);
+            player.setGravity(0,-1400);
+            player.setDamping(true);
+
+            plateformes.setCollisionByProperty({ estSolide: true });       
+            this.physics.add.collider(player, plateformes);
+
+            this.physics.world.setBounds(0, 0, 8000, 2240);
+            this.cameras.main.setBounds(0, 0, 8000, 2240);
+            this.cameras.main.startFollow(player);  
+        
+            this.anims.create({
+                key: 'nageDroite',
+                frames: this.anims.generateFrameNumbers('perso', {start:0,end:7}),
+                frameRate: 8,
+                repeat: -1
+            });
+            this.anims.create({
+                key: 'nageState',
+                frames: [ { key: 'perso', frame: 1 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'nageGauche',
+                frames: this.anims.generateFrameNumbers('perso', {start:8,end:15}),
+                frameRate: 8,
+                repeat: -1
+            });
+
+            //Création des éléments tortues, animation, réglage collision et assignement groupe
+            tortues = this.physics.add.group({allowGravity: false}); 
+            tortue = this.physics.add.sprite(4032,9206, 'tortue_mine');
+            tortue2 = this.physics.add.sprite(5888,1632, 'tortue_mine');
+            tortue3 = this.physics.add.sprite(4445,1312, 'tortue_mine');
+            tortue4 = this.physics.add.sprite(4576,864, 'tortue_mine');
+            tortue5 = this.physics.add.sprite(4032,1152, 'tortue_mine');
+            tortue6 = this.physics.add.sprite(4352,768, 'tortue_mine');
+            tortue7 = this.physics.add.sprite(6368,1344, 'tortue_mine');
+            tortue8 = this.physics.add.sprite(6176,1152, 'tortue_mine');
+            tortue9 = this.physics.add.sprite(6080,928, 'tortue_mine');
+            tortue10 = this.physics.add.sprite(5952,1056, 'tortue_mine');
+            tortue11 = this.physics.add.sprite(6016,1120, 'tortue_mine');
+            tortues.add(tortue);
+            tortues.add(tortue2);
+            tortues.add(tortue3);
+            tortues.add(tortue4);
+            tortues.add(tortue5);
+            tortues.add(tortue6);
+            tortues.add(tortue7);
+            tortues.add(tortue8);
+            tortues.add(tortue9);
+            tortues.add(tortue10);
+            tortues.add(tortue11);
+            this.physics.add.overlap(player, tortues, collisionTortue, null, this);
+            this.anims.create({
+                key: 'animTortue',
+                frames: this.anims.generateFrameNumbers('tortue_mine', {start:0,end:11}),
+                frameRate: 8,
+                repeat: -1
+            });
+            tortues.children.iterate(function(child){
+                child.anims.play('animTortue');
+            });
+
+            //Création des éléments sous-marin, animation, réglage collision et assignement groupe
+            sousMarins = this.physics.add.group({allowGravity: false});
+            sousMarin = this.physics.add.sprite(2336,960, 'sous-marin').setScale(2);
+            sousMarin2 = this.physics.add.sprite(3136,1344, 'sous-marin').setScale(2);
+            sousMarin3 = this.physics.add.sprite(4992,800, 'sous-marin').setScale(2);
+            sousMarin4 = this.physics.add.sprite(5664,1312, 'sous-marin').setScale(2);
+            sousMarins.add(sousMarin);
+            sousMarins.add(sousMarin2);
+            sousMarins.add(sousMarin3);
+            sousMarins.add(sousMarin4);
+            this.physics.add.collider(sousMarins, plateformes);
+            this.physics.add.collider(player, sousMarins, collisionSousMarin, null, this);
+            this.anims.create({
+                key: 'animSousMarinDroite',
+                frames: this.anims.generateFrameNumbers('sous-marin', {start:0,end:9}),
+                frameRate: 8,
+                repeat: -1
+            });
+            this.anims.create({
+                key: 'animSousMarinGauche',
+                frames: this.anims.generateFrameNumbers('sous-marin', {start:10,end:19}),
+                frameRate: 8,
+                repeat: -1
+            });
+
+            this.physics.add.collider(player, portes);
+            this.physics.add.overlap(player, capteur,gestionPorte,null,this);
+
+            //Création des éléments filets, réglage collision et assignement groupe
+            filet = this.physics.add.staticGroup();
+            filet.create(2668, 1308, 'filet').setScale(1.5);
+            filet.create(3872, 1142, 'filet').setScale(1.5);
+            filet.create(5388, 1399, 'filet').setScale(1.5);
+            filet.create(6592, 1336, 'filet').setScale(1.5);
+            this.physics.add.overlap(player, filet, collisionFilet, null, this);
+
+            //Création du groupe des symboles
+            symbole = this.physics.add.staticGroup();
+
+            //Création des éléments stations, animation, réglage collision et assignement groupe
+            station = this.physics.add.staticGroup();
+            station.create(2496, 2112, 'station').setScale(2);
+            station.create(5024, 480, 'station').setScale(2);
+            station.create(2464, 1504, 'station').setScale(2);
+            this.physics.add.overlap(player, station, powerUpBoost, null, this);           
+
+            //Création de la barre de vie et d'endurance
+            barreVie = this.physics.add.sprite(player.x-200,player.y-1300, 'barreVie').setScale(2);
+            barreVie.setGravity(0,-1500);
+            barreVie.setScrollFactor(0);
+            this.anims.create({
+                key: 'barreVieFull',
+                frames: [ { key: 'BarreVie', frame: 0 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreVie5Pv',
+                frames: [ { key: 'BarreVie', frame: 1 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreVie4Pv',
+                frames: [ { key: 'BarreVie', frame: 2 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreVie3Pv',
+                frames: [ { key: 'BarreVie', frame: 3 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreVie2Pv',
+                frames: [ { key: 'BarreVie', frame: 4 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreVie1Pv',
+                frames: [ { key: 'BarreVie', frame: 5 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreVie0Pv',
+                frames: [ { key: 'BarreVie', frame: 6 } ],
+                frameRate: 20
+            });
+            barreEndu = this.physics.add.sprite(player.x-200,player.y-1250, 'BarreEndu').setScale(2);
+            barreEndu.setGravity(0,-1500);
+            barreEndu.setScrollFactor(0);
+            this.anims.create({
+                key: 'barreEnduFull',
+                frames: [ { key: 'BarreEndu', frame: 0 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreEndu5',
+                frames: [ { key: 'BarreEndu', frame: 1 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreEndu4',
+                frames: [ { key: 'BarreEndu', frame: 2 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreEndu3',
+                frames: [ { key: 'BarreEndu', frame: 3 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreEndu2',
+                frames: [ { key: 'BarreEndu', frame: 4 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreEndu1',
+                frames: [ { key: 'BarreEndu', frame: 5 } ],
+                frameRate: 20
+            });
+            this.anims.create({
+                key: 'barreEndu0',
+                frames: [ { key: 'BarreEndu', frame: 6 } ],
+                frameRate: 20
+            });
+        }
+        
+    function update(){
+    //fonction pour enlever l'écran d'acceuil
+    this.input.on('pointerdown', function (pointer) {
+        menuDebut.destroy();
+    })
+
+    //fonction de frames d'invulnérabilité.
+    if(invincible == true){
+        compteur-- ;
+        player.setTint(0xff0000);
+        if(compteur == 0){
+            compteur = 90;
+            player.setTint(0xffffff);
+            invincible = false ;
+        }
+    }
+
+    //gestion de l'effet du power up de renforcement de stat, gestion de l'armure
+    if (compteurArmor != 0 && renforceStat==true && armor==false){
+        compteurArmor=compteurArmor-1;
+    }
+    if (renforceStat==true){
+        reducCoupEndu=2;
+        if (compteurArmor==0){
+        armor=true;
+        nbArmure=0;
+        }
+    }
+    if(compteurArmor == 0 && renforceStat==true){
+            compteurArmor = 360;
+        }
+    if (armor==true && nbArmure==0){
+        vieArmure = this.physics.add.sprite(barreVie.x,barreVie.y, 'vieArmor').setScale(2);
+        vieArmure.setGravity(0,-1500);
+        vieArmure.setScrollFactor(0);
+        nbArmure=1;
+    }
+
+    //gestion effet du power up d'invisibilité
+    if(actInvi==true && jaugeBoost>5){
+        jaugeBoost=jaugeBoost-5+reducCoupEndu;
+        player.alpha=0.2;
+    }else{
+        player.alpha=1;
+    }
+
+    //gestion effet de profondeurs
+    if(profondeur==false && player.y>=1600){
+        if (compteurProfondeur==90){
+            avertissement=this.add.text(player.x-300,player.y,'Vous êtes trop profond! Remontez!',{fontSize:'32px',fill:'#f00'});
+            avertissement.updateText();
+        }
+        compteurProfondeur=compteurProfondeur-1;
+        if (compteurProfondeur==0){
+            avertissement.setText('');
+            degat(player);
+            invincible=true;
+            compteurProfondeur=90;
+        }
+    }
+
+    //animation barre de vie
+    if (vieJoueur==6){
+        barreVie.anims.play('barreVieFull', true); //et animation => gauche
+    }
+    if (vieJoueur==5){
+        barreVie.anims.play('barreVie5Pv', true); //et animation => gauche
+    }
+    if (vieJoueur==4){
+        barreVie.anims.play('barreVie4Pv', true); //et animation => gauche
+    }
+    if (vieJoueur==3){
+        barreVie.anims.play('barreVie3Pv', true); //et animation => gauche
+    }
+    if (vieJoueur==2){
+        barreVie.anims.play('barreVie2Pv', true); //et animation => gauche
+    }
+    if (vieJoueur==1){
+        barreVie.anims.play('barreVie1Pv', true); //et animation => gauche
+    }
+    if (vieJoueur==0){
+        barreVie.anims.play('barreVie0Pv', true); //et animation => gauche
+    }
+
+    //réglage des comportements des sous marins
+    if (sousMarin.x>3000){
+        directionSousMarin=0;
+    }
+    if (sousMarin.x<2200){
+        directionSousMarin=1;
+    }
+    if (directionSousMarin==0){
+        sousMarin.setVelocityX(-100); //alors vitesse négative en X
+        sousMarin.anims.play('animSousMarinGauche', true); //et animation => gauche
+    }
+    if (directionSousMarin==1){
+        sousMarin.setVelocityX(+100); //alors vitesse négative en X
+        sousMarin.anims.play('animSousMarinDroite', true); //et animation => gauche
+    }
+
+
+    if (sousMarin2.x>3500){
+        directionSousMarin2=0;
+    }
+    if (sousMarin2.x<3200){
+        directionSousMarin2=1;
+    }
+    if (directionSousMarin2==0){
+        sousMarin2.setVelocityX(-100); //alors vitesse négative en X
+        sousMarin2.anims.play('animSousMarinGauche', true); //et animation => gauche
+    }
+    if (directionSousMarin2==1){
+        sousMarin2.setVelocityX(+100); //alors vitesse négative en X
+        sousMarin2.anims.play('animSousMarinDroite', true); //et animation => gauche
+    }
+
+    if (sousMarin3.x>5800){
+        directionSousMarin3=0;
+    }
+    if (sousMarin3.x<4800){
+        directionSousMarin3=1;
+    }
+    if (directionSousMarin3==0){
+        sousMarin3.setVelocityX(-100); //alors vitesse négative en X
+        sousMarin3.anims.play('animSousMarinGauche', true); //et animation => gauche
+    }
+    if (directionSousMarin3==1){
+        sousMarin3.setVelocityX(+100); //alors vitesse négative en X
+        sousMarin3.anims.play('animSousMarinDroite', true); //et animation => gauche
+    }
+
+    if (sousMarin4.x>5700){
+        directionSousMarin4=0;
+    }
+    if (sousMarin4.x<5550){
+        directionSousMarin4=1;
+    }
+    if (directionSousMarin4==0){
+        sousMarin4.setVelocityX(-100); //alors vitesse négative en X
+        sousMarin4.anims.play('animSousMarinGauche', true); //et animation => gauche
+    }
+    if (directionSousMarin4==1){
+        sousMarin4.setVelocityX(+100); //alors vitesse négative en X
+        sousMarin4.anims.play('animSousMarinDroite', true); //et animation => gauche
+    }
+
+    //gestion de la jauge d'endurance et animation
+    if (jaugeBoost<600){
+    jaugeBoost=jaugeBoost+2;
+    }
+    if (jaugeBoost>=600){
+        barreEndu.anims.play('barreEnduFull', true); //et animation => gauche
+    }
+    if (jaugeBoost<=500 && jaugeBoost>400){
+        barreEndu.anims.play('barreEndu5', true); //et animation => gauche
+    }
+    if (jaugeBoost<=400 && jaugeBoost>300){
+        barreEndu.anims.play('barreEndu4', true); //et animation => gauche
+    }
+    if (jaugeBoost<=300 && jaugeBoost>200){
+        barreEndu.anims.play('barreEndu3', true); //et animation => gauche
+    }
+    if (jaugeBoost<=200 && jaugeBoost>100){
+        barreEndu.anims.play('barreEndu2', true); //et animation => gauche
+    }
+    if (jaugeBoost<=100 && jaugeBoost>0){
+        barreEndu.anims.play('barreEndu1', true); //et animation => gauche
+    }
+    if (jaugeBoost==0){
+        barreEndu.anims.play('barreEndu0', true); //et animation => gauche
+    }
+
+    // gestion de la vie et du game over
+    if (vieJoueur==0){
+        gameOver=true;
+    }
+    if (gameOver==true){
+        gameOver=false;
+        this.scene.restart();
+    }
+
+    //gestion de l'activation des touches
+    if (this.keys.a.isDown && invisibilite==true){
+        actInvi=true;
+    }else{
+        actInvi=false;
+    }
+
+    if (cursors.left.isDown){
+        gauche=true;
+    }else{
+        gauche=false;
+    }
+
+    if (cursors.right.isDown){
+        droite=true;
+    }else{
+        droite=false;
+
+    }
+
+    if (cursors.up.isDown){
+        up=true;
+    }else{
+        up=false;
+    }
+
+    if (cursors.down.isDown){
+        down=true;
+    }else{
+        down=false;
+    }
+
+    if (cursors.space.isDown){
+        space=true;
+    }else{
+        space=false;
+    }
+
+
+    //gestion des mouvements en fonctions des touches
+    if (gauche==true){ 
+        if (space==true && jaugeBoost>5-reducCoupEndu){
+            player.setAccelerationX(-1000);
+            player.setDragX(0.95);
+            jaugeBoost=jaugeBoost-5+reducCoupEndu;
+        }else{
+            player.setAccelerationX(0);
+            player.setVelocityX(-320); 
+            player.anims.play('nageGauche', true);
+        }
+    }
+    else if (droite==true){ 
+        if (space==true && jaugeBoost>5-reducCoupEndu){
+            player.setAccelerationX(1000)
+            player.setDragX(0.95);
+            jaugeBoost=jaugeBoost-5+reducCoupEndu;
+        }else{
+            player.setAccelerationX(0);
+            player.setVelocityX(320);
+            player.anims.play('nageDroite', true); 
+        }
+    }
+    else{
+        player.setVelocityX(0);
+        player.anims.play('nageState'); 
+    }
+
+    if (up==true){
+        if (space==true && jaugeBoost>5-reducCoupEndu){
+            player.setAccelerationY(-1000);
+            player.setDragY(0.95);
+            jaugeBoost=jaugeBoost-5+reducCoupEndu;
+        }else{
+            player.setAccelerationY(0);
+            player.setVelocityY(-320);
+            player.anims.play('nageState'); 
+        }
+    }
+
+    if (down==true){ 
+        if (space==true && jaugeBoost>5-reducCoupEndu){
+            player.setAccelerationY(1000);
+            player.setDragY(0.95);
+            jaugeBoost=jaugeBoost-5+reducCoupEndu;
+        }else{
+            player.setAccelerationY(0);
+            player.setVelocityY(320);
+        }
+    }
+
+    //gestion de la rotation du sprite en fonction de la direction
+    if (droite==true){
+        player.rotation=0;
+    }
+    if (gauche==true){
+        player.rotation=0;
+    }
+    if (gauche==true && up==true){
+        player.rotation=165;
+    }
+    if (droite==true && up==true){
+        player.rotation=125;
+    }
+    if (gauche==true && down==true){
+        player.rotation=-45;
+    }
+    if (droite==true && down==true){
+        player.rotation=45;
+    }
+
+    //commande du pad
+    this.input.gamepad.once('connected', function (pad) {
+        paddle = pad;
+        padConnected = true;
+    });    
+    if (padConnected) {
+        if (paddle.up){
+            up=true;
+        }
+        if (paddle.left){
+            gauche=true;
+        }
+        if (paddle.right){
+            droite=true;
+        }
+        if (paddle.down){
+            down=true;
+        }
+        if (paddle.A && invincible==true){
+            actInvi=true;
+        }
+        if (paddle.X){
+            space=true;
+        }
+    }
+}
+//fonction de récupération des boosts, chaque stationa un effet différents
+function powerUpBoost(player, station){
+    if(station.x==5024 && station.y==480){
+        station.disableBody(true, true);
+        profondeur=true;
+        symboleP = this.physics.add.sprite(barreEndu.x-20,barreEndu.y+30, 'symbPro');
+        symboleP.setGravity(0,-1500);
+        symboleP.setScrollFactor(0);
+    }
+    if(station.x==2496 && station.y==2112){
+        station.disableBody(true, true);
+        invisibilite=true;
+        symboleI = this.physics.add.sprite(barreEndu.x+20,barreEndu.y+30, 'symbInvi');
+        symboleI.setGravity(0,-1500);
+        symboleI.setScrollFactor(0);
+    }
+    if(station.x==2464 && station.y==1504){
+        station.disableBody(true, true);
+        renforceStat=true;
+        symboleS = this.physics.add.sprite(barreEndu.x+60,barreEndu.y+30, 'symbStat');
+        symboleS.setGravity(0,-1500);
+        symboleS.setScrollFactor(0);
+    }
+}
+
+//gestion des collisions du joueur avec les tortues
+function collisionTortue(player, tortues){
+    degat(player);
+    explosion = this.physics.add.sprite(tortues.x,tortues.y,'exploTortue');
+    this.anims.create({
+        key: 'explosionsTortue',
+        frames: this.anims.generateFrameNumbers('exploTortue', {start:0,end:2}),
+        frameRate: 10,
+    });
+    explosion.setGravity(0,-1500);
+    tortues.disableBody(true, true);
+    explosion.anims.play('explosionsTortue');
+    this.physics.add.collider(player, explosion);
+    }
+
+//gestion des collisions du joueur avec les sous-marins
+function collisionSousMarin(player, sousMarins){
+    if (space==true){
+    sousMarins.disableBody(true, true);
+    }else if (invincible==false){
+        degat(player); 
+    }
+}
+
+//gestion des collisions du joueur avec les portes
+function gestionPorte(){
+    if(actInvi!=true){
+        portes.setY(1550);
+    }else{
+        portes.setY(1300);
+    }
+}
+
+//gestion des collisions du joueur avec les filets
+function collisionFilet(player, filet){
+vieJoueur=0;
+}
+
+//gestion des dégats
+function degat(player){
+    if (invincible==false){
+        if (armor==true){
+            armor=false;
+            invincible=true;
+            vieArmure.destroy();
+        }else{
+            invincible=true;
+            vieJoueur=vieJoueur-1;
+        }
+    }
+}
+    </script>
+
+<script type="text/javascript">(function(){window['__CF$cv$params']={r:'6d75315e0d940476',m:'a5SyxtvusStKNybgZ1I6imKEgP6FULyM_PjuUUnXsL4-1643823503-0-AUTBAjNNCPtGuVtI4p2SsaXyfAmzEP5J65UuvxH2DMFVQ4osoYzAgBNtjxuBHsAhU13N3LpAgI/LF5Hqy5h5cyE86XkWFTkrUNrRcUQ0fhIrxo8cBVqJEGeIn18q0UKSjMGL4YLXnVQkKIzepUnEwws5kvd6Jt9nbhhXHJjM1+fCnnPlGlfzfDU8S0hRNwN7QQ==',s:[0x5647a12d67,0x92112b06e0],}})();</script></body>
+</html>
